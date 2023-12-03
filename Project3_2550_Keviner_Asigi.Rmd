@@ -1,0 +1,899 @@
+---
+title: "PHP2550 Project 3"
+output:
+  bookdown::pdf_document2:
+    toc: false
+    number_sections: false
+bibliography: references.bib  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, 
+                      warning=FALSE, 
+                      error=FALSE, 
+                      echo = FALSE, 
+                      fig.pos = "H" ,
+                      fig.align = 'center')
+```
+
+
+```{r Load the required libraries}
+# load required library
+library(tidyverse)
+library(kableExtra)
+library(knitr)
+library(pROC)
+library(latex2exp)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(lattice)
+library(riskCommunicator)
+library(tableone)
+library(nhanesA)
+library(broom)
+library(MASS)
+library(gtsummary)
+```
+
+#   **Transportability of Prediction Models.**
+
+**Background:** Simulation studies are virtual experiments that involves generation of data through random sampling from known probability distributions [@morris2019]. These studies are key in modern research and analysis. Simulation studies provide a controlled and mimicked environment essential for investigating complex systems. They are widely employed in biostatistics to evaluate and compare different statistical methods under varied situations. These studies help analysts understand how statistical methods behave, as they involve knowing some truth about the parameters of interest during the data generation process [@morris2019]. Despite their significance,reviewers have previously shown that poorly designed and analyzed simulation studies often lead to the uncritical use and interpretation of results[@morris2019]. In that context, our study follows the ADEMP guidelines described by Morris (2019), aiming to address these challenges in this simulation study. Specifically, our simulation study aims to evaluate the performance of a predictive logistic risk model for cardiovascular heart disease, originally derived from the Framingham Heart Study data and subsequently transporting measures of model performance to estimate their performance within the population underlying the NHANES (National Health and Nutrition Examination Survey) survey data. By employing the ADEMP guidelines for the methods we achieve transparency in our simulation study and contribute to the understanding of the model's transportability and its potential application in diverse populations.More information about the sources of the data are publicly available at: https://www.cdc.gov/nchs/nhanes.htm and https://biolincc.nhlbi.nih.gov/studies/framcohort/.
+
+**Method:** This study uses data from Framingham Heart Study to train predictive logistic risk models for predicting the risk of cardiovascular heart disease in men and women in the Nhanes population in the US. A weighted generalized logistic regression model was employed on the Framingham data to predict the risk of cardiovascular Heart disease with inverse estimated odds of source participation used as weights. The ADEMP principles was employed to conduct the simulation study with rigor and transparency, and to transport the prediction score from the Framingham study to a sample target population obtained from the Nhanes study.Data was generated based on the covariate information of the Nhanes sample based on the known probability and the specified population quantities. Nhanes data lacked long-term outcome information, therefore a comprehensive approach was utilized for integrating data from both NHANES and the Framingham Heart Study based on the variables that were common between these two populations. Eligibility criteria for the Framingham study to the Nhanes sample was also applied based on age and previous history of a stroke and heart attack as the inclusion criterion from the Framingham study. The integrated data was used to obtain inverse odds weights that were used in training the Framingham models and subsequent evaluations on target sample (Nhanes) as well as the simulated sample.The estimated weighted brier scores were presented for evaluating the models.
+
+**Results:** Data with 2539 complete cases was used in training the Framingham predictive model and evaluated on the 2838 complete data of the Nhanes sample . On Nhanes data, the model achieved an weighted brier score of 0.19 and 0.11 on cardiovascular prediction on men and women respectively both on the simulated and non-simulated data. These scores were relatively low suggesting a moderate level of accuracy of predicting the probability of a cardiovascular heart disease and a good calibration. The model achieved an AUC of 0.7795 and 0.7248 for women and men respectively.
+
+**Conclusion:** In this dynamic realm of study, simulations enhances our ability to make evidence-based decisions, particularly in scenarios where real world experiments may be impractical, unavailable or ethically challenging. The same weighted Brier scores of the prediction model in the target populations compared to the source population reflects the major similarities in the covariate distribution between the two populations indicating that transportability analysis can be achieved given the scenarios where data is generated based on the available covariate information from the target population. The results shows that the model's performance is similar in Nhanes sample and simulated Nhanes population. The analysis provides insights into how well logistic regression models predict cardiovascular disease (CVD) in different populations.
+
+**Commonly used:**National Health and Nutrition Examination Survey (NHANES)/target population and Framingham Heart Study (Framingham)/source population.
+
+##    **Introduction**
+
+Simulation studies mimics the real world and serve as an invaluable tool for understanding complex systems in a controlled and virtual environment. Application of simulation studies has risen in the recent past in various fields [@bienstock2022]. Its application has significantly grown in research. Simulation studies enhances the understanding of the hypothetical scenarios and optimize strategies to be adopted in different fields such as predictive modelling especially in scenarios where obtaining real data seem challenging or where outcome data is missing. In this context the application of simulation studies provides a platform for risk assessment, decision making and further innovations in research. In the ever evolving world of technology and research, the application of simulation studies have increased greatly and have continued to be used to gain insights and making informed decisions across diverse domains[@Boulesteix2020].
+
+In recent years, several methods have been developed to evaluate the performance of prediction models in a target population and transporting measures of model performance from the source population to the target population[@steingrimsson2023].
+
+Simulation studies have become integral to biostatistics. They serve as a tool for methodological evaluation, and the assessment of statistical models[@boulesteix2020]. In this field, simulations are routinely employed to compare the performance of different statistical methods, prediction models and optimize clinical trial designs[@bienstock2022].
+
+Users of prediction models are usually interested in using model-derived predictions in some target population [@steingrimsson2023]. For instance, a healthcare system may employ predictive models for the likelihood of cardiovascular events in individuals receiving medical care, which may help help to identify individuals at a higher risk [@steingrimsson2023].In most cases, the source data (used in building the prediction model) are different from the target data as they drawn from different samples [@steingrimsson2023].  
+
+Our goal is therefore is to customize the Framingham model to the Nhanes population and to evaluate its performance in Nhanes population as well as the simulated population commonly referred to as transporting a prediction model.
+
+This study is a collaboration with Dr. Jon Steingrimsson in the Biostatistics Department at Brown University. The study's overall gioal is to understand how well a prediction model perform in a target population that differs from the population where the model was developed and evaluated in. We evaluate the performance of cardiovascular risk prediction model in a target population underlying NHANES sample. We also conduct an evaluation where the target population is simulated based on the covariate information of the target population. 
+
+##    **Data**
+
+The analysis used data from 2539 Framingham Heart (1094 men and 1445 women) and 2838 Nhanes samples who met Framingham eligibility criteria. The Framingham (source) data was used as the train set while the Nhanes (target) as the test set.
+
+
+```{r Load in data and initial preprocessing}
+# load source data
+data("framingham")
+
+# The Framingham data has been used to create models for cardiovascular risk.
+# The variable selection and model below are designed to mimic the models used
+# in the paper General Cardiovascular Risk Profile for Use in Primary Care 
+# This paper is available (cvd_risk_profile.pdf) on Canvas.
+
+framingham_df <- framingham %>% dplyr::select(c(CVD, TIMECVD, SEX, TOTCHOL, AGE,
+                                      SYSBP, DIABP, CURSMOKE, DIABETES, BPMEDS,
+                                      HDLC, BMI))
+framingham_df <- na.omit(framingham_df)
+
+framingham_summary_stats <- CreateTableOne(data=framingham_df, strata = c("SEX"))
+
+# Get blood pressure based on whether or not on BPMEDS
+framingham_df$SYSBP_UT <- ifelse(framingham_df$BPMEDS == 0, 
+                                 framingham_df$SYSBP, 0)
+framingham_df$SYSBP_T <- ifelse(framingham_df$BPMEDS == 1, 
+                                framingham_df$SYSBP, 0)
+
+# Looking at risk within 15 years - remove censored data
+#dim(framingham_df)
+framingham_df <- framingham_df %>%
+  filter(!(CVD == 0 & TIMECVD <= 365*15)) %>%
+  dplyr::select(-c(TIMECVD))
+#dim(framingham_df)
+
+# Filter to each sex
+framingham_df_men <- framingham_df %>% filter(SEX == 1)
+framingham_df_women <- framingham_df %>% filter(SEX == 2)
+
+# Fit models with log transforms for all continuous variables
+mod_men <- glm(CVD~log(HDLC)+log(TOTCHOL)+log(AGE)+log(SYSBP_UT+1)+
+                 log(SYSBP_T+1)+CURSMOKE+DIABETES, 
+      data= framingham_df_men, family= "binomial")
+
+
+mod_women <- glm(CVD~log(HDLC)+log(TOTCHOL)+log(AGE)+log(SYSBP_UT+1)+
+                   log(SYSBP_T+1)+CURSMOKE+DIABETES, 
+               data= framingham_df_women, family= "binomial")
+
+
+# The NHANES data here finds the same covariates among this national survey data
+library(nhanesA)
+
+# blood pressure, demographic, bmi, smoking, and hypertension info
+bpx_2017 <- nhanes("BPX_J") %>% 
+  dplyr::select(SEQN, BPXSY1 ) %>% 
+  rename(SYSBP = BPXSY1)
+
+demo_2017 <- nhanes("DEMO_J") %>% 
+  dplyr::select(SEQN, RIAGENDR, RIDAGEYR) %>% 
+  rename(SEX = RIAGENDR, AGE = RIDAGEYR)
+
+bmx_2017 <- nhanes("BMX_J") %>% 
+  dplyr::select(SEQN, BMXBMI) %>% 
+  rename(BMI = BMXBMI)
+
+smq_2017 <- nhanes("SMQ_J") %>%
+  mutate(CURSMOKE = case_when(SMQ040 %in% c(1,2) ~ 1,
+                              SMQ040 == 3 ~ 0, 
+                              SMQ020 == 2 ~ 0)) %>%
+  dplyr::select(SEQN, CURSMOKE)
+
+bpq_2017 <- nhanes("BPQ_J") %>% 
+  mutate(BPMEDS = case_when(
+    BPQ020 == 2 ~ 0,
+    BPQ040A == 2 ~ 0,
+    BPQ050A == 1 ~ 1,
+    TRUE ~ NA )) %>%
+  dplyr::select(SEQN, BPMEDS) 
+
+tchol_2017 <- nhanes("TCHOL_J") %>% 
+  dplyr::select(SEQN, LBXTC) %>% 
+  rename(TOTCHOL = LBXTC)
+hdl_2017 <- nhanes("HDL_J") %>% 
+  dplyr::select(SEQN, LBDHDD) %>% 
+  rename(HDLC = LBDHDD)
+diq_2017 <- nhanes("DIQ_J") %>% 
+  mutate(DIABETES = case_when(DIQ010 == 1 ~ 1, 
+                              DIQ010 %in% c(2,3) ~ 0, 
+                              TRUE ~ NA)) %>%
+  dplyr::select(SEQN, DIABETES) 
+
+mcq_2017 <- nhanes("MCQ_J") %>% 
+  dplyr::select(SEQN, MCQ160E, MCQ160F) 
+
+# Join data from different tables
+nhanes_df <- bpx_2017 %>%
+  full_join(demo_2017, by = "SEQN") %>%
+  full_join(bmx_2017, by = "SEQN") %>%
+  full_join(hdl_2017, by = "SEQN") %>%
+  full_join(smq_2017, by = "SEQN") %>%
+  full_join(bpq_2017, by = "SEQN") %>%
+  full_join(tchol_2017, by = "SEQN") %>%
+  full_join(diq_2017, by = "SEQN") %>% 
+  full_join(mcq_2017, by = "SEQN") # added by keviner
+
+# Eligibility criteria based on the framingham paper
+nhanes_df <- nhanes_df %>% 
+  filter(AGE >= 30 & AGE <= 62) %>% 
+  filter(MCQ160E == 2 & MCQ160F == 2)
+
+# Get blood pressure based on whether or not on BPMEDS
+nhanes_df$SYSBP_UT <- ifelse(nhanes_df$BPMEDS == 0, 
+                                 nhanes_df$SYSBP, 0)
+nhanes_df$SYSBP_T <- ifelse(nhanes_df$BPMEDS == 1, 
+                                nhanes_df$SYSBP, 0)
+
+#nhanes_df$SEX <- as.factor(nhanes_df$SEX)
+nhanes_df$CURSMOKE <- as.factor(nhanes_df$CURSMOKE)
+nhanes_df$BPMEDS <- as.factor(nhanes_df$BPMEDS)
+
+nhanes_df$MCQ160E <- as.factor(nhanes_df$MCQ160E)
+nhanes_df$MCQ160F <- as.factor(nhanes_df$MCQ160F)
+nhanes_df$DIABETES <- as.factor(nhanes_df$ DIABETES)
+
+framingham_df$CURSMOKE <- as.factor(framingham_df$CURSMOKE)
+framingham_df$BPMEDS <- as.factor(framingham_df$BPMEDS)
+framingham_df$DIABETES <- as.factor(framingham_df$DIABETES)
+#framingham_df$CVD <- as.factor(framingham_df$CVD)
+#framingham_df$CVD <- factor(framingham_df$CVD, levels = c("0", "1"))
+
+nhanes_summary_stats <- CreateTableOne(data = nhanes_df, strata = c("SEX"))
+
+```
+
+###   **Missing Data**
+
+```{r mytable}
+
+# Distribution of Missing Data for nhanes_df
+missing_df <- data.frame(
+  Variable = names(nhanes_df),
+  missing_count = sapply(nhanes_df, function(x) sum(is.na(x)))
+)
+
+# Calculate percent missing
+missing_df$percent_missing <- round(missing_df$missing_count / nrow(nhanes_df) * 100, 2)
+
+# Arrange by percent missing in descending order
+missing_df <- missing_df %>%
+  arrange(desc(percent_missing))
+
+# Select only those with missing records
+missing_df <- missing_df %>%
+  filter(missing_count > 0) 
+missing_df$missing_count <- round(missing_df$missing_count, 2)
+missing_df$percent_missing <- round(missing_df$percent_missing, 2)
+
+missing_df %>% 
+kable(caption = "Missing Data in Target Population", 
+      col.names = c("Variable", "Missing Count", "% Proportion"),
+        digits = 3,
+        booktabs = TRUE) %>% 
+ kable_styling(latex_options = c("HOLD_position", "striped"),
+              font_size=8)
+
+```
+
+As illustrated in Table \@ref(tab:mytable), the observed missing data within the target population (NHANES) shows a non-random pattern, as indicated by varying proportions across different variables. Notably, the variable `SYSBP_UT` has the highest missing count at 17.79%, implying a potential systematic pattern in non response . Similarly, variables `SYSBP`, `HDLC`, and `TOTCHOL` also show relatively higher proportions of missing values, with  `HDLC` and `TOTCHOL` missing together implying MNAR in the missing pattern.
+
+In the analysis, we considered the potential impact of MNAR missingness on biasing estimates within the target population. To mitigate this, we employed the `mice` package in R for imputation. This method generated five imputed datasets, with complete estimates. The imputed datasets were then used in further analysis.
+
+##   **Methods**   
+
+We assessed the sex specific calibration performance of a logistic regression model for prediction of cardiovascular disease (CVD) risk in Nhanes data. We used a composite data for the combined source and target populations based on common variables. We included an indicator variable `S` to distinguish between the source (Framingham data) and the NHANES datasets in the composite dataset. A logistic regression model was used to estimate the probability of membership in the source population. Using these model we derived the inverse-odds weights and applied these weights in training the predictive logistic regression model for CVD prediction using the Framingham sample. We then estimate the model performance in the NHANES target population. The model's performance was evaluated using weighted Brier scores and mean squared errors. The sex specific models showed slightly different score on predicting on Nhanes data. The model for men had a slightly higher Brier score (0.192) than the model for women (0.117).  
+
+
+```{r Impute for missing data in nhanes}
+# impute using mice package for nhanes df
+nhanes_df_mice_out <- mice::mice(nhanes_df, 5, pri=F)
+
+# Store each imputed data set
+nhanes_df_imp <- vector("list",5)    
+for (i in 1:5){
+   nhanes_df_imp[[i]] <- mice::complete(nhanes_df_mice_out,i) 
+}
+#nhanes_df_imp[[1]] # Example of accessing first imputed dataset
+
+```
+
+
+```{r Final Model Training and Evaluation for men using real data}
+
+# Iterate over imputed datasets
+brier_scores <- numeric(length(nhanes_df_imp))
+mse_scores <- numeric(length(nhanes_df_imp))
+
+for (i in 1:5) {
+  # Filter to each sex in nhanes df
+  nhanes_men <- nhanes_df_imp[[i]] %>% filter(SEX == 1)
+  
+  # Create the indicator variable 
+  framingham_df$S <- 1
+  nhanes_df_imp[[i]]$S <- 0
+  
+  # Common variables
+  vars <- intersect(names(framingham_df), names(nhanes_df_imp[[i]]))
+  
+  # Combine Framingham with Nhanes 
+  dat <- bind_rows(
+    mutate(framingham_df, dataset = "framingham"),
+    mutate(nhanes_df_imp[[i]] %>% dplyr::select(all_of(vars)), dataset = "nhanes")
+  )
+  
+  # Remove missing values
+  dat <- na.omit(dat)
+  
+  # Filter to each sex
+  dat_men <- dat %>% filter(SEX == 1)
+  
+  # Fit the logistic regression model for the probability of membership in framingham 
+  logit_men <- glm(S ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT+1) + log(SYSBP_T+1) + CURSMOKE + DIABETES, data = dat_men, family= "binomial")
+  
+  # Get the probabilities
+  fram_prob_men <- predict(logit_men, newdata = subset(dat_men, S == 1), type = "response")
+
+  # Calculate the odds
+  oddsM <- fram_prob_men / (1 - fram_prob_men)
+
+  # Calculate the inverse odds weights
+  inv_oddsW_men <- 1 / oddsM
+  
+    # Fit models with logistic regression model with weights
+  mod_men <- glm(CVD ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT+1) + log(SYSBP_T+1) + factor(CURSMOKE) + factor(DIABETES), data = framingham_df_men, family= "binomial", weights = inv_oddsW_men)
+  
+  # Predict the probabilities of CVD for men
+  pred_prob_men <- predict(mod_men, newdata = subset(dat_men, S == 1), type = "response")
+  
+  # Calculate the Brier score estimator for nhanes population
+  brier_scores[i] <- mean((pred_prob_men - dat_men$CVD)^2)
+ 
+  # Calculate the mean squared error
+  mse_scores[i] <- mean((dat_men$CVD - pred_prob_men)^2)
+}
+
+# Combine results from all imputed datasets
+final_brier_score_men <- mean(brier_scores)
+final_mse_score_men <- mean(mse_scores)
+
+```
+
+
+```{r Final Model Training and Evaluation for women using real data}
+# Loop over imputed datasets
+brier_scores2 <- numeric(length(nhanes_df_imp))
+mse_scores2 <- numeric(length(nhanes_df_imp))
+
+for (i in 1:5) {
+  # Filter to each sex in nhanes df
+  nhanes_women <- nhanes_df_imp[[i]] %>% filter(SEX == 2)
+  
+  # Create the indicator variable 
+  framingham_df$S <- 1
+  nhanes_df_imp[[i]]$S <- 0
+  
+  # Common variables
+  vars <- intersect(names(framingham_df), names(nhanes_df_imp[[i]]))
+  
+  # Combine Framingham with Nhanes 
+  dat <- bind_rows(
+    mutate(framingham_df, dataset = "framingham"),
+    mutate(nhanes_df_imp[[i]] %>% dplyr::select(all_of(vars)), dataset = "nhanes")
+  )
+  
+  # Remove missing values
+  dat <- na.omit(dat)
+  
+  # Filter to each sex
+  dat_women <- dat %>% filter(SEX == 2)
+  
+  # Fit the logistic regression model for the probability of membership in framingham 
+  logit_women <- glm(S ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT+1) + log(SYSBP_T+1) + CURSMOKE + DIABETES, data = dat_women, family= "binomial")
+  
+  # Estimate the inverse-odds weights for women participants 
+    fram_prob_women <- predict(logit_men, newdata = subset(dat_women, S == 1), type = "response")
+
+  # Calculate the odds
+  oddsW <- fram_prob_women / (1 - fram_prob_women)
+
+  # Calculate the inverse odds weights
+  inv_oddsW_women <- 1 / oddsW
+  
+  # Fit models with logistic regression model with weights
+  mod_women <- glm(CVD ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT+1) + log(SYSBP_T+1) + factor(CURSMOKE) + factor(DIABETES), data = framingham_df_women, family= "binomial", weights = inv_oddsW_women)
+  
+  # Predict the probabilities of CVD for men
+  pred_prob_women <- predict(mod_women, newdata = subset(dat_women, S == 1), type = "response")
+  
+  # Calculate the Brier score estimator 
+  brier_scores2[i] <- mean((pred_prob_women - dat_women$CVD)^2)
+ 
+  # Calculate the mean squared error
+  mse_scores2[i] <- mean((dat_women$CVD - pred_prob_women)^2)
+}
+
+# Combine results from all imputed sets
+final_brier_score_women <- mean(brier_scores2)
+final_mse_score_women <- mean(mse_scores2)
+
+```
+
+
+```{r mytables}
+
+# Combine results for men
+final_results_men <- data.frame(
+  Metric = c("Brier Score", "MSE Score"),
+  "Men Model" = c(final_brier_score_men, final_mse_score_men)
+)
+
+# Combine results for women
+final_results_women <- data.frame(
+  Metric = c("Brier Score", "MSE Score"),
+  "Women Model" = c(final_brier_score_women, final_mse_score_women)
+)
+
+# Combine both men and women results
+final_results <- merge(final_results_men, final_results_women, by = "Metric")
+
+final_results %>% 
+kable(caption = "Measures of calibration on Nhanes Data", 
+      col.names = c("Metric", "Model for Men", "Model for Women"),
+        digits = 3,
+        booktabs = TRUE) %>% 
+ kable_styling(latex_options = c("HOLD_position", "striped"),
+              font_size=8)
+```
+
+
+```{r roccurves, fig.cap="ROC Curve for the Model on Non-Simulated data", out.width = "80%"}
+# Create ROC curve for women
+roccurvewomen <- roc(dat_women$CVD, pred_prob_women)
+
+# ROC curve for men
+roccurvemen <- roc(dat_men$CVD, pred_prob_men)
+
+# Create ROC curves for men and women
+roc_data_men <- data.frame(
+  TPR = roccurvemen$sensitivities,
+  FPR = 1 - roccurvemen$specificities)
+
+# ROC curves for women
+roc_data_women <- data.frame(
+  TPR = roccurvewomen$sensitivities,
+  FPR = 1 - roccurvewomen$specificities)
+
+# ROC Plots
+ggplot() +
+  geom_line(data = roc_data_men, aes(x = FPR, y = TPR, color = "Men"), size = 1) +
+  geom_line(data = roc_data_women, aes(x = FPR, y = TPR, color = "Women"), size = 1, alpha = 0.3) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+    labs(title = "ROC Curves for Predictive Model on Nhanes Population",
+       x = "False Positive Rate",
+       y = "True Positive Rate") +
+  scale_color_manual(values = c("lightblue", "red")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+##    **Prediction Logistic Models**. 
+
+We adapted and assessed prediction models for Nhanes (target) population, that differed from Framingham (source) population where the sex-specific models were originally developed. We relied on using covariate information from the Nhanes population. Our approach for transporting prediction models assumed that the outcome and population were conditionally independent given the covariates 
+\[
+\frac{{Pr[S = 0| X, D_{\text{test}} = 1]}}{{Pr[S = 0| X, D_{\text{test}} = 1]}}
+\] 
+and the positivity of the likelihood of being in the Framingham population for each covariate pattern in the Nhanes population.  We employed inverse-odds weights to apply the prediction model and evaluate its performance in the target population. This involved estimating the probability of belonging to the Framingham population based on covariates. We applied these methods to both simulated and real data for transporting a prediction model for Cardiovascular Heart disease from the Framingham Heart study to the US population of Nhanes eligible individuals.
+
+##    **Simulations Design**
+
+Individual level data was simulated for men and women separately based on the covariate information as seen in the summary statistics from Table 3 for each variable on the target population (Nhanes). The simulation size, was determined by the specified number of men $N = 1326$ and $N = 1512$ for women from the summary Table 3 so as to generate a pseudo-sample that resembles the Nhanes sample. We set two different random seed for each simulation to ensure reproducibility.The simulation included all the variables that were in the summary table. The continuous data (e.g., `SYSBP`, `AGE`, `BMI`, `HDLC`, `TOTCHOL`, `SYSBP_UT`, `SYSBP_T`) were simulated through a multivariate normal distribution with parameter values for mean and standard deviations set from the summary output in Table 3 and the binary data (e.g., `MCQ160E`, `MCQ160F`, `CURSMOKE`, `BPMEDS`, `DIABETES`) generated using a binomial distribution using the proportions from summary table. These parameters were utilized to simulate data that closely resembled the characteristics of the target (Nhanes) population.
+
+##    **Simulation Results**
+
+As shown in Table 4 the simulated summary statistics closely match the summary statistics of the Nhanes dataset. Although some of the means and standard deviations of the simulated data are slightly different from the non-simulated sample which could be due to the variable transformation. The little overlap implies that the simulation's captured distribution assumptions and effectively reproduced the individual characteristics from the Nhanes dataset, indicating reliability of the simulated results in representing the underlying Nhanes data.
+
+
+```{r Simulating data for women}
+
+set.seed(2)
+
+sim_women <- function(n, means, sds, props) {
+  n_vars <- length(means)
+  cont_data <- mvrnorm(n, means, diag(sds^2), empirical = TRUE)
+  bin_data <- matrix(0, nrow = n, ncol = length(props))
+  for (i in seq_along(props)) {
+    bin_data[, i] <- rbinom(n, 1, props[i] / 100)
+  }
+  
+  sim_women <- cbind(cont_data, bin_data)
+  return(sim_women)
+}
+
+# set parameters
+means <- c(
+  SYSBP = 122.30,
+  AGE = 46.49,
+  BMI = 30.69,
+  HDLC = 57.72,
+  TOTCHOL = 195.22,
+  SYSBP_UT =  88.46,
+  SYSBP_T = 25.36
+)
+sds <- c(
+  SYSBP = 18.71,
+  AGE = 9.85,
+  BMI = 8.34,
+  HDLC = 16.22,
+  TOTCHOL = 38.06,
+  SYSBP_UT = 52.79,
+  SYSBP_T = 53.16
+)
+
+props <- c(
+  MCQ160E = 100.0,
+  MCQ160F = 100.0,
+  CURSMOKE = 16.3,
+  BPMEDS = 21.8,
+  DIABETES = 10.3
+)
+
+# Number of simulations
+num_sim <- 1512  
+
+# Initialize an empty list to store simulation results
+simulation_W <- list()
+
+for (i in 1:num_sim) {
+  # Simulate individual pop for women
+  simulate_women <- sim_women(num_sim, means, sds, props)
+  simulation_W[[i]] <- simulate_women
+}
+
+```
+
+
+```{r Simulating data for men}
+
+set.seed(1)
+sim_men <- function(n, means, sds, props) {
+  
+  # Number of variables
+  n_vars <- length(means)
+  
+  # Simulations 
+  cont_data <- mvrnorm(n, means, diag(sds^2), empirical = TRUE)
+  bin_data <- matrix(0, nrow = n, ncol = length(props))
+  for (i in seq_along(props)) {
+    bin_data[, i] <- rbinom(n, 1, props[i] / 100)
+  }
+  
+  sim_men <- cbind(cont_data, bin_data)
+  return(sim_men)
+}
+
+# set parameters
+means <- c(
+  SYSBP = 125.62,
+  AGE = 46.65,
+  BMI = 30.10,
+  HDLC = 47.78,
+  TOTCHOL = 194.01,
+  SYSBP_UT = 93.08,
+  SYSBP_T =  24.55
+)
+
+sds <- c(
+  SYSBP = 16.12,
+  AGE = 9.90,
+  BMI = 6.68,
+  HDLC = 14.74,
+  TOTCHOL = 40.21,
+  SYSBP_UT = 54.29,
+  SYSBP_T = 51.52
+)
+
+props<- c(
+  MCQ160E = 100.0,
+  MCQ160F = 100.0,
+  CURSMOKE = 25.7,
+  BPMEDS = 21.5,
+  DIABETES = 11.2
+)
+
+# Number of men to simulate
+n_sim <- 1326
+
+
+# Initialize an empty list to store simulation results
+simulation_M <- list()
+
+for (i in 1:n_sim) {
+  # Simulate individual men pop
+  simulate_men <- sim_men(n_sim, means, sds, props)
+  simulation_M[[i]] <- simulate_men
+}
+
+```
+
+
+```{r Transformations for simulated df and model fit}
+
+# Combine all simulated data into one dataframe
+simM <- do.call(rbind, simulation_M)
+simW <- do.call(rbind, simulation_W)
+
+# change the simulated data to df
+simW_df <- as.data.frame(simM)
+simM_df <- as.data.frame(simM)
+
+simW_df$SEX <- 2  
+simM_df$SEX <- 1 
+
+simW_df <- simW_df %>%
+  rename(
+    MCQ160E = V8,
+    MCQ160F = V9,
+    CURSMOKE = V10,
+    BPMEDS = V11,
+    DIABETES = V12)
+
+simM_df <- simM_df %>%
+  rename(
+    MCQ160E = V8,
+    MCQ160F = V9,
+    CURSMOKE = V10,
+    BPMEDS = V11,
+    DIABETES = V12)
+
+framingham_df_women$DIABETES <- as.factor(framingham_df_women$DIABETES)
+framingham_df_women$BPMEDS <- as.factor(framingham_df_women$BPMEDS)
+framingham_df_women$CURSMOKE <- as.factor(framingham_df_women$CURSMOKE)
+
+framingham_df_men$DIABETES <- as.factor(framingham_df_men$DIABETES)
+framingham_df_men$BPMEDS <- as.factor(framingham_df_men$BPMEDS)
+framingham_df_men$CURSMOKE <- as.factor(framingham_df_men$CURSMOKE)
+
+simM_df$CURSMOKE <- as.factor(simM_df$CURSMOKE)
+simM_df$DIABETES <- as.factor(simM_df$DIABETES)
+simM_df$BPMEDS <- as.factor(simM_df$BPMEDS)
+simM_df$MCQ160E <- as.factor(simM_df$MCQ160E)
+simM_df$MCQ160F <- as.factor(simM_df$MCQ160F)
+
+simW_df$CURSMOKE <- as.factor(simW_df$CURSMOKE)
+simW_df$DIABETES <- as.factor(simW_df$DIABETES)
+simW_df$BPMEDS <- as.factor(simW_df$BPMEDS)
+simW_df$MCQ160E <- as.factor(simW_df$MCQ160E)
+simW_df$MCQ160F <- as.factor(simW_df$MCQ160F)
+
+
+# include the indicator
+framingham_df_men$S <- 1
+simM_df$S <- 0 
+simW_df$S <- 0 
+
+# combine dfs for summary stats
+simM_simW_df <- bind_rows(simM_df,simW_df)
+
+
+```
+
+
+```{r summarytable}
+# summary output table for nhanes data
+summary_table <- nhanes_df %>%
+  select(-SEQN) %>%
+  tbl_summary(missing = "no", by = SEX,
+              statistic = all_continuous() ~ "{mean} ({sd} {min}, {max})")%>% 
+  as_gt() %>%
+  gt::tab_header(title = "Table 3. Summary Statistics for Nhanes Data",
+                 subtitle = "Stratified by Sex")
+summary_table
+```
+
+
+```{r mysummarytable}
+# summary output table for simulated data
+summary_table1 <- simM_simW_df %>%
+  select(-S) %>%
+  tbl_summary(
+    by = SEX, 
+    statistic = all_continuous() ~ "{mean} ({sd} {min}, {max})"
+  ) %>%
+  as_gt() %>%
+  gt::tab_header(
+    title = "Table 4. Summary Statistics Across Simulations",
+    subtitle = "Stratified by Sex"
+  )
+
+# Print output
+summary_table1
+
+```
+
+```{r Women Models evaluation on simulated df }
+
+bsW_women_sims <- numeric(num_sim)
+
+# Loop through each simulation
+for (i in 1:num_sim) {
+    curr_sim_datW <- as.data.frame(simulation_W[[i]])  
+   names(curr_sim_datW)[names(curr_sim_datW) %in% c("V8", "V9", "V10", "V11", "V12")] <- c("CURSMOKE", "DIABETES", "BPMEDS", "MCQ160E", "MCQ160F")
+  bin_vars <- c("CURSMOKE", "DIABETES", "BPMEDS", "MCQ160E", "MCQ160F")
+  curr_sim_datW[bin_vars] <- lapply(curr_sim_datW[bin_vars], as.factor)
+  
+  # Create the indicator variable 'S' in the simulated df
+  framingham_df_women$S <- 1
+  curr_sim_datW$S <- 0
+  
+  # common variables for current simulation
+  varsW <- intersect(c(names(framingham_df_women), "SEX"), names(curr_sim_datW))
+  
+  # Convert binary vars in framing df
+  framingham_df_women$CURSMOKE <- as.factor(framingham_df_women$CURSMOKE)
+   framingham_df_women$BPMEDS <- as.factor(framingham_df_women$BPMEDS)
+  framingham_df_women$DIABETES <- as.factor(framingham_df_women$DIABETES)
+  
+  # Combine Framingham with simulated 
+  datW <- bind_rows(
+    mutate(framingham_df_women, dataset = "framingham"),
+    mutate(curr_sim_datW %>% dplyr::select(all_of(varsW)), dataset = "simW")
+  )
+  
+  # Remove missing values
+  datW <- na.omit(datW)
+  
+  # Fit the logistic regression model for the probability of membership in framing data
+  logit_womenW <- glm(S ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT + 1) + log(SYSBP_T + 1) + factor(CURSMOKE) + factor(DIABETES), data = subset(datW, SEX == 2), family = "binomial")
+  
+  # Estimate the inverse-odds weights for women participants 
+  fram_prob_women2 <- predict(logit_womenW, newdata = subset(datW, SEX == 2 & S == 1), type = "response")
+  
+  # Calculate the odds
+  oddsW <- fram_prob_women2 / (1 - fram_prob_women2)
+  
+  # Calculate the inverse odds weights
+  inv_oddsW_women <- 1 / oddsW
+  
+  # Fit models with logistic regression model with weights on the Framingham data
+  mod_womenW <- glm(CVD ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT + 1) + log(SYSBP_T + 1) + factor(CURSMOKE) + factor(DIABETES), data = subset(datW, dataset == "framingham" & SEX == 2), family = "binomial", weights = inv_oddsW_women)
+  
+  # Predict the probabilities of CVD 
+  preds_womenW <- predict(mod_womenW, newdata = subset(datW, dataset == "framingham" & SEX == 2), type = "link")
+  preds_womenW <- plogis(preds_womenW)
+
+  
+  # Extract the actual for women
+  obs_womenW <- subset(datW, dataset == "framingham" & SEX == 2)$CVD
+  
+  # Calculate the Weighted Brier score 
+  bsW_women_sims[i] <- mean((preds_womenW - obs_womenW)^2)
+  
+}
+
+# Overall Weighted Brier score for women across all simulations
+bsW_women <- round(mean(bsW_women_sims, na.rm = T),4)
+```
+
+
+
+```{r Men Models evaluation on simulated df }
+
+bsW_men_sims <- numeric(n_sim)
+
+# Loop through each simulation
+for (i in 1:n_sim) {
+  curr_sim_datM <- as.data.frame(simulation_M[[i]])  
+  names(curr_sim_datM)[names(curr_sim_datM) %in% c("V8", "V9", "V10", "V11", "V12")] <- c("CURSMOKE", "DIABETES", "BPMEDS", "MCQ160E", "MCQ160F")
+  bin_vars <- c("CURSMOKE", "DIABETES", "BPMEDS", "MCQ160E", "MCQ160F")
+  curr_sim_datM[bin_vars] <- lapply(curr_sim_datM[bin_vars], as.factor)
+  
+  # Create the indicator variable 'S' 
+  framingham_df_men$S <- 1
+  curr_sim_datM$S <- 0
+  
+  # common variables 
+  varsM <- intersect(c(names(framingham_df_men), "SEX"), names(curr_sim_datM))
+  
+  # Convert binary vars in framing df
+  framingham_df_men$CURSMOKE <- as.factor(framingham_df_men$CURSMOKE)
+   framingham_df_men$BPMEDS <- as.factor(framingham_df_men$BPMEDS)
+  framingham_df_men$DIABETES <- as.factor(framingham_df_men$DIABETES)
+  
+  # Combine Framingham with simulated 
+  datM <- bind_rows(
+    mutate(framingham_df_men, dataset = "framingham"),
+    mutate(curr_sim_datM %>% dplyr::select(all_of(varsM)), dataset = "simM")
+  )
+  
+  # Remove missing values
+  datM <- na.omit(datM)
+  
+  # Fit the logistic regression model for the probability of membership in the framing data
+  logit_menM <- glm(S ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT + 1) + log(SYSBP_T + 1) + factor(CURSMOKE) + factor(DIABETES), data = subset(datM, SEX == 1), family = "binomial")
+  
+  # Estimate the inverse-odds weights for women participants 
+  fram_prob_men2 <- predict(logit_menM, newdata = subset(datM, SEX == 1 & S == 1), type = "response")
+  
+  # Calculate the odds
+  oddsM <- fram_prob_men2 / (1 - fram_prob_men2)
+  
+  # Calculate the inverse odds weights
+  inv_oddsW_men <- 1 / oddsM
+  
+  # Fit models with logistic regression model with weights on the Framingham data
+  mod_menM <- glm(CVD ~ log(HDLC) + log(TOTCHOL) + log(AGE) + log(SYSBP_UT + 1) + log(SYSBP_T + 1) + factor(CURSMOKE) + factor(DIABETES), data = subset(datM, dataset == "framingham" & SEX == 1), family = "binomial", weights = inv_oddsW_men)
+  
+  # Predict the probabilities of CVD 
+  preds_menM <- predict(mod_menM, newdata = subset(datM, dataset == "framingham" & SEX == 1), type = "link")
+  
+  # Get predicted probabilities
+preds_menM <- plogis(preds_menM)
+
+  
+  # Extract the actual observation for women
+  obs_menM <- subset(datM, dataset == "framingham" & SEX == 1)$CVD
+  
+  # Calculate the Weighted Brier score for the current iteration
+  bsW_men_sims[i] <- mean((preds_menM - obs_menM)^2)
+  
+}
+
+# Overall Weighted Brier score for men across all simulations
+bsW_men <- round(mean(bsW_men_sims, na.rm = T),4)
+
+```
+
+
+```{r mytables2}
+
+metrics <- c("Brier Score", "Brier Score")
+men_values <- c(bsW_men, final_brier_score_men)
+women_values <- c(bsW_women, final_mse_score_women)
+
+# Combine for both men and women
+final_results <- data.frame(
+  Metric = rep(metrics, each = 2),
+  Model = rep(c("Men Model", "Women Model"), times = 2),
+  Value = c(men_values, women_values)
+)
+
+# reshape results
+final_results <- pivot_wider(final_results, names_from = Model, values_from = Value)
+final_results %>% 
+  kable(caption = "Comparison for Measures of calibration", 
+        col.names = c("Metric", "Model on Simulated", "Model on Non Simulated"),
+        digits = 3,
+        booktabs = TRUE) %>% 
+  kable_styling(latex_options = c("HOLD_position", "striped"),
+                font_size = 8)
+
+```
+
+
+```{r roccurves2, fig.cap="ROC Curve for Model on Simulated data", out.width = "80%"}
+
+roc_curve_women <- roc(obs_womenW, preds_womenW)
+roc_auc_women <- auc(roc_curve_women)
+
+roc_curve_men <- roc(obs_menM, preds_menM)
+roc_auc_men <- auc(roc_curve_men)
+
+# Create ROC curves for men and women
+roc_data_men2 <- data.frame(
+  TPR = roc_curve_men$sensitivities,
+  FPR = 1 - roc_curve_men$specificities)
+
+# ROC curves for women
+roc_data_women2 <- data.frame(
+  TPR = roc_curve_women$sensitivities,
+  FPR = 1 - roc_curve_women$specificities)
+
+# AUC 
+auc_label_men <- sprintf("Men AUC = %.2f", roc_auc_men)
+auc_label_women <- sprintf("Women AUC = %.2f", roc_auc_women)
+
+# ROC Plots
+ggplot() +
+  geom_line(data = roc_data_men2, aes(x = FPR, y = TPR, color = "Men"), size = 1, alpha = 0.7) +
+  geom_line(data = roc_data_women2, aes(x = FPR, y = TPR, color = "Women"), size = 1, alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+  labs(title = "ROC Curves on Simulated Data",
+    x = "False Positive Rate",
+    y = "True Positive Rate") +
+  scale_color_manual(values = c("lightblue", "red")) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  annotate("text",x = 0.5,y = 0.75,label = auc_label_men,
+           color = "black", hjust = 0,vjust = 1) +
+  annotate("text",x = 0.5,y = 0.45,label = auc_label_women,
+           color = "red",hjust = 0,vjust = 1)
+
+```
+
+##    **Transportability of Prediction Models**.
+
+In this study, we conducted a transportability analysis to assess the applicability of logistic regression models for predicting the likelihood of cardiovascular disease (CVD) in simulated Nhanes population. Using the Framingham Heart Study data as a source population, we simulated diverse datasets representing Nhanes covariate information. Logistic regression models were adapted for each simulation incorporating inverse-odds weights derived from the Framingham data. These weights, were computed based on predicted CVD probabilities from the Framingham logistics model to adjust for the differences between the Framingham and Nhanes populations. The models were used to predict CVD probabilities in simulated data, and predictive accuracy was assessed using the Brier score. 
+
+##   **Transportability Results**
+
+The Brier scores presented in Table \@ref(tab:mytables2) indicate comparable performance between the simulated and non-simulated data. Notably, the model predicting cardiovascular risk in men exhibited a slightly higher Brier score (0.1926) compared to the model for women (0.1166), suggesting a marginally lower predictive accuracy for cardiovascular risk in men as reflected by the higher Brier score.
+
+##   **Limitations**
+
+Our study had a number of limitations. First, the simulations were based on assumed distributions and parameters, which may have likely introduced uncertainty in the replication of real-world populations and does not consider outliers and extreme values. Secondly, the logistic regression models used in the study relied on a specific set of covariates, which could potentially be overlooking important variables not captured by the Framingham model.Additionally, the adaptation of inverse-odds weights assumed that the relationship between predictors and CVD remains consistent across populations, which may not hold in all instances.Furthermore, the application of the Framingham model to predict CVD probabilities in simulated population assumes that the underlying risk factors and relationships are comparable between genders.Despite these limitations, our analysis provides valuable insights into the transportability of the Framingham model and its performance, which underscores the complexities in applying predictive models across diverse populations especially where real data is lacking.
+
+
+##   **Conclusion**
+
+Our study found that the simulated and non-simulated data showed similar weighted Brier risk scores for predicting cardiovascular risk in Nhanes population.However, the model showed a slightly lower accuracy in predicting cardiovascular risk for men than for women. Overall, our predictive model works optimally when transported to different populations than the one it was built and evaluated in. This analysis contributes insights into the model's robustness and generalization when applied beyond its original study population. This work highlights the need for improvement of predictive models for cardiovascular outcomes.
+
+
+\newpage
+
+##    **References**
+
+
+<div id="refs"></div>
+
+\newpage
+
+## **Code Appendix**
+
+```{r ref.label=c("Load the required libraries", "Load in data and initial preprocessing", "mytable"), echo=TRUE, eval=FALSE}
+```
+
