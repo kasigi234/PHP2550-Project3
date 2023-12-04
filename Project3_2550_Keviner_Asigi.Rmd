@@ -885,6 +885,8 @@ Our study found that the simulated and non-simulated data showed similar weighte
 
 \newpage
 
+Link to Github page: https://github.com/kasigi234/PHP2550-Project3
+
 ##    **References**
 
 
