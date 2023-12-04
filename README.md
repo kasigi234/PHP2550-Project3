@@ -1,4 +1,4 @@
-# PHP2550 Project3
+# PHP2550 Project3: Simulation study
 ## Transportability of Prediction Models
  This is a project assignment in the Practical Data Analysis PHP2550 course at Brown University
  
